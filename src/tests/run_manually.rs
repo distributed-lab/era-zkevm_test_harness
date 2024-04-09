@@ -235,6 +235,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         geometry,
         storage_impl,
         &mut tree,
+        "kzg/src/trusted_setup.json",
         std::array::from_fn(|_| None),
         |circuit| basic_block_circuits.push(circuit),
         |_, _, _| {},
