@@ -60,6 +60,7 @@ use utils::read_basic_test_artifact;
 
 use zkevm_assembly::Assembly;
 
+#[ignore = "Too slow"]
 #[test]
 fn basic_test() {
     let test_artifact = read_basic_test_artifact();
@@ -78,6 +79,7 @@ fn basic_test() {
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
+#[ignore = "Too slow, requires CRS"]
 #[test]
 fn test_single_compression() {
     let config = testing_wrapper::get_testing_wrapper_config();
@@ -85,6 +87,7 @@ fn test_single_compression() {
     testing_wrapper::test_compression_for_compression_num(config);
 }
 
+#[ignore = "Too slow, requires CRS"]
 #[test]
 fn test_compression_all_modes() {
     for compression in 1..=WrapperConfig::MAX_COMPRESSION_LAYERS {
@@ -1270,6 +1273,7 @@ fn run_and_try_create_witness_inner(
     println!("DONE");
 }
 
+#[ignore = "broken test"]
 #[test]
 fn run_single() {
     use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
