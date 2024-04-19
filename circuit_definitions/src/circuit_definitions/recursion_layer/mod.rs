@@ -86,6 +86,19 @@ pub enum ZkSyncRecursionLayerStorageType {
     RecursionTipCircuit = 255,
 }
 
+impl ZkSyncRecursionLayerStorageType {
+    pub fn as_iter_u8() -> impl Iterator<Item = u8> {
+        (ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
+            ..=ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8)
+            .chain(Self::leafs_as_iter_u8())
+    }
+
+    pub fn leafs_as_iter_u8() -> impl Iterator<Item = u8> {
+        ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8
+            ..=ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEIP4844Repack as u8
+    }
+}
+
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug)]
 #[serde(bound = "")]
