@@ -1,3 +1,5 @@
+use std::iter::once;
+
 use super::*;
 use crate::boojum::cs::implementations::proof::Proof;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
@@ -91,6 +93,9 @@ impl ZkSyncRecursionLayerStorageType {
         (ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
             ..=ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8)
             .chain(Self::leafs_as_iter_u8())
+            .chain(once(
+                ZkSyncRecursionLayerStorageType::RecursionTipCircuit as u8,
+            ))
     }
 
     pub fn leafs_as_iter_u8() -> impl Iterator<Item = u8> {
