@@ -102,6 +102,63 @@ impl ZkSyncRecursionLayerStorageType {
         ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8
             ..=ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEIP4844Repack as u8
     }
+
+    pub fn from_leaf_u8_to_basic_u8(value: u8) -> u8 {
+        match value {
+            a if a == Self::LeafLayerCircuitForMainVM as u8 => BaseLayerCircuitType::VM as u8,
+            a if a == Self::LeafLayerCircuitForCodeDecommittmentsSorter as u8 => {
+                BaseLayerCircuitType::DecommitmentsFilter as u8
+            }
+            a if a == Self::LeafLayerCircuitForCodeDecommitter as u8 => {
+                BaseLayerCircuitType::Decommiter as u8
+            }
+            a if a == Self::LeafLayerCircuitForLogDemuxer as u8 => {
+                BaseLayerCircuitType::LogDemultiplexer as u8
+            }
+            a if a == Self::LeafLayerCircuitForKeccakRoundFunction as u8 => {
+                BaseLayerCircuitType::KeccakPrecompile as u8
+            }
+            a if a == Self::LeafLayerCircuitForSha256RoundFunction as u8 => {
+                BaseLayerCircuitType::Sha256Precompile as u8
+            }
+            a if a == Self::LeafLayerCircuitForECRecover as u8 => {
+                BaseLayerCircuitType::EcrecoverPrecompile as u8
+            }
+            a if a == Self::LeafLayerCircuitForRAMPermutation as u8 => {
+                BaseLayerCircuitType::RamValidation as u8
+            }
+            a if a == Self::LeafLayerCircuitForStorageSorter as u8 => {
+                BaseLayerCircuitType::StorageFilter as u8
+            }
+            a if a == Self::LeafLayerCircuitForStorageApplication as u8 => {
+                BaseLayerCircuitType::StorageApplicator as u8
+            }
+            a if a == Self::LeafLayerCircuitForEventsSorter as u8 => {
+                BaseLayerCircuitType::EventsRevertsFilter as u8
+            }
+            a if a == Self::LeafLayerCircuitForL1MessagesSorter as u8 => {
+                BaseLayerCircuitType::L1MessagesRevertsFilter as u8
+            }
+            a if a == Self::LeafLayerCircuitForL1MessagesHasher as u8 => {
+                BaseLayerCircuitType::L1MessagesHasher as u8
+            }
+            a if a == Self::LeafLayerCircuitForTransientStorageSorter as u8 => {
+                BaseLayerCircuitType::TransientStorageChecker as u8
+            }
+            a if a == Self::LeafLayerCircuitForSecp256r1Verify as u8 => {
+                BaseLayerCircuitType::Secp256r1Verify as u8
+            }
+            a if a == Self::LeafLayerCircuitForEIP4844Repack as u8 => {
+                BaseLayerCircuitType::EIP4844Repack as u8
+            }
+            _ => {
+                panic!(
+                    "could not map recursive circuit type {} to a basic circuit",
+                    value
+                )
+            }
+        }
+    }
 }
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]

@@ -52,3 +52,5 @@ pub mod compute_setups;
 pub mod proof_wrapper_utils;
 
 pub(crate) mod tests;
+
+pub use tests::complex_tests::utils::empty_node_proof;
