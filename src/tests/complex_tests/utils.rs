@@ -20,8 +20,5 @@ pub fn read_basic_test_artifact() -> TestArtifact {
 
 // Returns an 'empty' node proof, that can be used in cases where we don't have any basic (and node) circuits of a given type.
 pub fn empty_node_proof() -> ZkSyncRecursionLayerProof {
-    bincode::deserialize_from(
-        File::open("src/tests/complex_tests/test_artifacts/empty_proof.bin").unwrap(),
-    )
-    .unwrap()
+    bincode::deserialize_from(&include_bytes!("test_artifacts/empty_proof.bin")[..]).unwrap()
 }
