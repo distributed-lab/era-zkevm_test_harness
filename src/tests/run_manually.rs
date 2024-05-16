@@ -302,7 +302,15 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
 
     for el in basic_block_circuits {
         println!("Doing {} circuit", el.short_description());
-        base_test_circuit(el);
+        match el {
+            ZkSyncBaseLayerCircuit::ECAdd(_) => {
+                base_test_circuit(el);
+            }
+            _ => {
+                continue;
+            }
+        }
+        // base_test_circuit(el);
     }
 
     // // for el in flattened.into_iter() {

@@ -17,6 +17,9 @@ pub const TARGET_CIRCUIT_TRACE_LENGTH: usize = 1 << 20;
 
 // should follow in the same sequence as we will logically process sequences
 pub mod code_decommitter;
+pub mod ecadd;
+pub mod ecmul;
+pub mod ecpairing;
 pub mod ecrecover;
 pub mod events_sort_dedup;
 pub mod keccak256_round_function;
@@ -29,11 +32,15 @@ pub mod storage_apply;
 pub mod storage_sort_dedup;
 pub mod transient_storage_sort;
 pub mod vm_main;
+
 // pub mod l1_messages_sort_dedup; // equal to one above
 pub mod eip4844;
 pub mod linear_hasher;
 
 pub use self::code_decommitter::CodeDecommitterInstanceSynthesisFunction;
+use self::ecadd::ECAddFunctionInstanceSynthesisFunction;
+use self::ecmul::ECMulFunctionInstanceSynthesisFunction;
+use self::ecpairing::ECPairingFunctionInstanceSynthesisFunction;
 pub use self::ecrecover::ECRecoverFunctionInstanceSynthesisFunction;
 pub use self::eip4844::EIP4844InstanceSynthesisFunction;
 pub use self::events_sort_dedup::EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction;
@@ -88,6 +95,9 @@ pub type TransientStorageSorterCircuit = ZkSyncUniformCircuitInstance<
 >;
 pub type Secp256r1VerifyCircuit =
     ZkSyncUniformCircuitInstance<GoldilocksField, Secp256r1VerifyFunctionInstanceSynthesisFunction>;
+pub type ECAddCircuit = ZkSyncUniformCircuitInstance<GoldilocksField, ECAddFunctionInstanceSynthesisFunction>;
+pub type ECMulCircuit = ZkSyncUniformCircuitInstance<GoldilocksField, ECMulFunctionInstanceSynthesisFunction>;
+pub type ECPairingCircuit = ZkSyncUniformCircuitInstance<GoldilocksField, ECPairingFunctionInstanceSynthesisFunction>;
 pub type EIP4844Circuit =
     ZkSyncUniformCircuitInstance<GoldilocksField, EIP4844InstanceSynthesisFunction>;
 
@@ -104,6 +114,9 @@ pub enum ZkSyncBaseLayerStorage<
     KeccakRoundFunction(T),
     Sha256RoundFunction(T),
     ECRecover(T),
+    ECAdd(T),
+    ECMul(T),
+    ECPairing(T),
     RAMPermutation(T),
     StorageSorter(T),
     StorageApplication(T),
@@ -127,6 +140,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::KeccakRoundFunction(..) => "Keccak",
             ZkSyncBaseLayerStorage::Sha256RoundFunction(..) => "SHA256",
             ZkSyncBaseLayerStorage::ECRecover(..) => "ECRecover",
+            ZkSyncBaseLayerStorage::ECAdd(..) => "Elliptic Curve points addition",
+            ZkSyncBaseLayerStorage::ECMul(..) => "Elliptic Curve point multiplication by a scalar",
+            ZkSyncBaseLayerStorage::ECPairing(..) => "Elliptic Curve pairing on BN254",
             ZkSyncBaseLayerStorage::RAMPermutation(..) => "RAM permutation",
             ZkSyncBaseLayerStorage::StorageSorter(..) => "Storage sorter",
             ZkSyncBaseLayerStorage::StorageApplication(..) => "Storage application",
@@ -158,6 +174,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::ECRecover(..) => {
                 BaseLayerCircuitType::EcrecoverPrecompile as u8
             }
+            ZkSyncBaseLayerStorage::ECAdd(..) => BaseLayerCircuitType::ECAdd as u8,
+            ZkSyncBaseLayerStorage::ECMul(..) => BaseLayerCircuitType::ECMul as u8,
+            ZkSyncBaseLayerStorage::ECPairing(..) => BaseLayerCircuitType::ECPairing as u8,
             ZkSyncBaseLayerStorage::RAMPermutation(..) => BaseLayerCircuitType::RamValidation as u8,
             ZkSyncBaseLayerStorage::StorageSorter(..) => BaseLayerCircuitType::StorageFilter as u8,
             ZkSyncBaseLayerStorage::StorageApplication(..) => {
@@ -199,6 +218,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::L1MessagesHasher(inner) => inner,
             ZkSyncBaseLayerStorage::TransientStorageSorter(inner) => inner,
             ZkSyncBaseLayerStorage::Secp256r1Verify(inner) => inner,
+            ZkSyncBaseLayerStorage::ECAdd(inner) => inner,
+            ZkSyncBaseLayerStorage::ECMul(inner) => inner,
+            ZkSyncBaseLayerStorage::ECPairing(inner) => inner,
             ZkSyncBaseLayerStorage::EIP4844Repack(inner) => inner,
         }
     }
@@ -235,6 +257,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             }
             a if a == BaseLayerCircuitType::Secp256r1Verify as u8 => Self::Secp256r1Verify(inner),
             a if a == BaseLayerCircuitType::EIP4844Repack as u8 => Self::EIP4844Repack(inner),
+            a if a == BaseLayerCircuitType::ECAdd as u8 => Self::ECAdd(inner),
+            a if a == BaseLayerCircuitType::ECMul as u8 => Self::ECMul(inner),
+            a if a == BaseLayerCircuitType::ECPairing as u8 => Self::ECPairing(inner),
             a @ _ => panic!("unknown numeric type {}", a),
         }
     }
@@ -271,6 +296,9 @@ where
     TransientStorageSorter(TransientStorageSorterCircuit),
     Secp256r1Verify(Secp256r1VerifyCircuit),
     EIP4844Repack(EIP4844Circuit),
+    ECAdd(ECAddCircuit),
+    ECMul(ECMulCircuit),
+    ECPairing(ECPairingCircuit),
 }
 
 impl ZkSyncBaseLayerCircuit
@@ -301,6 +329,9 @@ where
             ZkSyncBaseLayerCircuit::TransientStorageSorter(..) => "Transient storage sorter",
             ZkSyncBaseLayerCircuit::Secp256r1Verify(..) => "Secp256r1 verify",
             ZkSyncBaseLayerCircuit::EIP4844Repack(..) => "EIP4844 repacker",
+            ZkSyncBaseLayerCircuit::ECAdd(..) => "ECAdd",
+            ZkSyncBaseLayerCircuit::ECMul(..) => "ECMul",
+            ZkSyncBaseLayerCircuit::ECPairing(..) => "ECPairing",
         }
     }
 
@@ -322,6 +353,9 @@ where
             ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => inner.size_hint(),
             ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => inner.size_hint(),
             ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => inner.size_hint(),
+            ZkSyncBaseLayerCircuit::ECAdd(inner) => inner.size_hint(),
+            ZkSyncBaseLayerCircuit::ECMul(inner) => inner.size_hint(),
+            ZkSyncBaseLayerCircuit::ECPairing(inner) => inner.size_hint(),
         }
     }
 
@@ -419,6 +453,9 @@ where
             ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => {
                 Self::synthesis_inner::<_, CR>(inner, hint)
             }
+            ZkSyncBaseLayerCircuit::ECAdd(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
+            ZkSyncBaseLayerCircuit::ECMul(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
+            ZkSyncBaseLayerCircuit::ECPairing(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
         }
     }
 
@@ -440,6 +477,9 @@ where
             ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => inner.geometry_proxy(),
             ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => inner.geometry_proxy(),
             ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => inner.geometry_proxy(),
+            ZkSyncBaseLayerCircuit::ECAdd(inner) => inner.geometry_proxy(),
+            ZkSyncBaseLayerCircuit::ECMul(inner) => inner.geometry_proxy(),
+            ZkSyncBaseLayerCircuit::ECPairing(inner) => inner.geometry_proxy(),
         }
     }
 
@@ -493,6 +533,15 @@ where
             ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => {
                 inner.debug_witness();
             }
+            ZkSyncBaseLayerCircuit::ECAdd(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::ECMul(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::ECPairing(inner) => {
+                inner.debug_witness();
+            }
         };
 
         ()
@@ -538,6 +587,9 @@ where
                 BaseLayerCircuitType::Secp256r1Verify as u8
             }
             ZkSyncBaseLayerCircuit::EIP4844Repack(..) => BaseLayerCircuitType::EIP4844Repack as u8,
+            ZkSyncBaseLayerCircuit::ECAdd(..) => BaseLayerCircuitType::ECAdd as u8,
+            ZkSyncBaseLayerCircuit::ECMul(..) => BaseLayerCircuitType::ECMul as u8,
+            ZkSyncBaseLayerCircuit::ECPairing(..) => BaseLayerCircuitType::ECPairing as u8,
         }
     }
 }

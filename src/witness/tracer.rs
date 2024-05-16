@@ -15,6 +15,9 @@ use crate::zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
 use crate::zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_MAX_STACK_DEPTH;
+use circuit_definitions::zk_evm::zk_evm_abstractions::precompiles::ecadd::ECAddRoundWitness;
+use circuit_definitions::zk_evm::zk_evm_abstractions::precompiles::ecmul::ECMulRoundWitness;
+use circuit_definitions::zk_evm::zk_evm_abstractions::precompiles::ecpairing::ECPairingRoundWitness;
 use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::TRANSIENT_STORAGE_AUX_BYTE;
 use tracing;
 
@@ -82,6 +85,9 @@ pub struct WitnessTracer {
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
     pub secp256r1_verify_witnesses: Vec<(u32, LogQuery, Secp256r1VerifyRoundWitness)>,
+    pub ecadd_witnesses: Vec<(u32, LogQuery, ECAddRoundWitness)>,
+    pub ecmul_witnesses: Vec<(u32, LogQuery, ECMulRoundWitness)>,
+    pub ecpairing_witnesses: Vec<(u32, LogQuery, Vec<ECPairingRoundWitness>)>,
     pub monotonic_query_counter: usize,
     // pub log_frames_stack: Vec<ApplicationData<((usize, usize), (QueryMarker, u32, LogQuery))>>, // keep the unique frame index
     pub callstack_with_aux_data: CallstackWithAuxData,
@@ -143,6 +149,9 @@ impl WitnessTracer {
             sha256_round_function_witnesses: vec![],
             ecrecover_witnesses: vec![],
             secp256r1_verify_witnesses: vec![],
+            ecadd_witnesses: vec![],
+            ecmul_witnesses: vec![],
+            ecpairing_witnesses: vec![],
             monotonic_query_counter: 0,
             // log_frames_stack: vec![ApplicationData::empty()],
             callstack_with_aux_data: CallstackWithAuxData::empty(),
@@ -366,6 +375,30 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
                     call_params,
                     wit.drain(..).next().unwrap(),
                 ));
+            }
+            PrecompileCyclesWitness::ECAdd(mut wit) => {
+                self.ecadd_witnesses.push((
+                    monotonic_cycle_counter,
+                    call_params,
+                    wit.drain(..).next().unwrap(),
+                ));
+            }
+            PrecompileCyclesWitness::ECMul(mut wit) => {
+                self.ecmul_witnesses.push((
+                    monotonic_cycle_counter,
+                    call_params,
+                    wit.drain(..).next().unwrap(),
+                ));
+            }
+            PrecompileCyclesWitness::ECPairing(mut wit) => {
+                self.ecpairing_witnesses.push((
+                    monotonic_cycle_counter,
+                    call_params,
+                    wit.drain(..).collect(),
+                ));
+            }
+            PrecompileCyclesWitness::Modexp(_wit) => {
+                // not implemented as of now
             }
             PrecompileCyclesWitness::Secp256r1Verify(mut wit) => {
                 assert_eq!(wit.len(), 1);
