@@ -79,11 +79,15 @@ pub fn run<
         queue_simulator_callback,
         &mut out_of_circuit_tracer,
     ) {
-        Ok((scheduler_circuit_witness, aux_data)) => {(scheduler_circuit_witness, aux_data)},
+        Ok((scheduler_circuit_witness, aux_data)) => (scheduler_circuit_witness, aux_data),
         Err(err) => {
             let error_text = match err {
-                RunVmError::InvalidInput(msg) => {format!("Invalid input error: {msg}")},
-                RunVmError::OutOfCircuitExecutionError(msg) => {format!("Out-of-circuit execution error: {msg}")},
+                RunVmError::InvalidInput(msg) => {
+                    format!("Invalid input error: {msg}")
+                }
+                RunVmError::OutOfCircuitExecutionError(msg) => {
+                    format!("Out-of-circuit execution error: {msg}")
+                }
             };
             panic!("{error_text}");
         }

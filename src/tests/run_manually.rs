@@ -277,11 +277,15 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
         std::array::from_fn(|_| None),
         |circuit| basic_block_circuits.push(circuit),
         |_, _, _| {},
-        &mut out_of_circuit_tracer
+        &mut out_of_circuit_tracer,
     ) {
         let error_text = match err {
-            RunVmError::InvalidInput(msg) => {format!("Invalid input error: {msg}")},
-            RunVmError::OutOfCircuitExecutionError(msg) => {format!("Out-of-circuit execution error: {msg}")},
+            RunVmError::InvalidInput(msg) => {
+                format!("Invalid input error: {msg}")
+            }
+            RunVmError::OutOfCircuitExecutionError(msg) => {
+                format!("Out-of-circuit execution error: {msg}")
+            }
         };
         panic!("{error_text}");
     }

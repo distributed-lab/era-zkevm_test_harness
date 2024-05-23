@@ -1,6 +1,6 @@
-use std::collections::VecDeque;
 use crate::blake2::Blake2s256;
 use crate::boojum::field::goldilocks::GoldilocksField;
+use crate::boojum::gadgets::traits::allocatable::*;
 use crate::entry_point::*;
 use crate::snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
 use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
@@ -20,6 +20,7 @@ use crate::zk_evm::contract_bytecode_to_words;
 use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::zk_evm::GenericNoopTracer;
 use crate::zkevm_circuits::linear_hasher::input::LinearHasherOutputDataWitness;
+use crate::zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
 use crate::zkevm_circuits::{
     base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH,
     eip_4844::input::*,
@@ -37,15 +38,14 @@ use circuit_definitions::zk_evm::tracing::Tracer;
 use circuit_definitions::zk_evm::zkevm_opcode_defs::VersionedHashLen32;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::{Field as MainField, ZkSyncDefaultRoundFunction};
-use crate::boojum::gadgets::traits::allocatable::*;
-use crate::zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
+use std::collections::VecDeque;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
 #[derive(Debug)]
 pub enum RunVmError {
     InvalidInput(String),
-    OutOfCircuitExecutionError(String)
+    OutOfCircuitExecutionError(String),
 }
 
 /// Executes a given set of instructions, and returns things necessary to do the proving:
@@ -82,10 +82,17 @@ pub fn run_vms<
     circuit_callback: CB,
     queue_simulator_callback: QSCB,
     out_of_circuit_tracer: &mut impl Tracer<SupportedMemory = SimpleMemory>,
-) -> Result<(
-    SchedulerCircuitInstanceWitness<MainField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
-    BlockAuxilaryOutputWitness<MainField>,
-), RunVmError> {
+) -> Result<
+    (
+        SchedulerCircuitInstanceWitness<
+            MainField,
+            CircuitGoldilocksPoseidon2Sponge,
+            GoldilocksExt2,
+        >,
+        BlockAuxilaryOutputWitness<MainField>,
+    ),
+    RunVmError,
+> {
     let round_function = ZkSyncDefaultRoundFunction::default();
 
     if zk_porter_is_available {
@@ -93,7 +100,7 @@ pub fn run_vms<
     }
 
     if !ram_verification_queries.is_empty() {
-        return Err(RunVmError::InvalidInput("ram_verification_queries isn't empty; for now it's implemented such that we do not need it".to_owned()))
+        return Err(RunVmError::InvalidInput("ram_verification_queries isn't empty; for now it's implemented such that we do not need it".to_owned()));
     }
 
     let initial_rollup_root = tree.root();
@@ -208,10 +215,14 @@ pub fn run_vms<
     }
 
     if !out_of_circuit_vm.execution_has_ended() {
-        return Err(RunVmError::OutOfCircuitExecutionError("VM execution didn't finish".to_owned()));
+        return Err(RunVmError::OutOfCircuitExecutionError(
+            "VM execution didn't finish".to_owned(),
+        ));
     }
     if out_of_circuit_vm.local_state.callstack.current.pc != 0 {
-        return Err(RunVmError::OutOfCircuitExecutionError("root frame ended up with panic".to_owned()));
+        return Err(RunVmError::OutOfCircuitExecutionError(
+            "root frame ended up with panic".to_owned(),
+        ));
     }
 
     println!("Out of circuit tracing is complete, now running witness generation");
