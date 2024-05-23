@@ -47,11 +47,10 @@ pub use circuit_sequencer_api::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
 // #[cfg(test)]
 pub mod helper;
+pub(crate) mod tests;
 
 pub mod compute_setups;
 pub mod proof_wrapper_utils;
-
-pub(crate) mod tests;
 
 pub use tests::complex_tests::utils::empty_node_proof;
 
