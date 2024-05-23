@@ -42,6 +42,12 @@ use crate::zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
+#[derive(Debug)]
+pub enum RunVmError {
+    InvalidInput(String),
+    OutOfCircuitExecutionError(String)
+}
+
 /// Executes a given set of instructions, and returns things necessary to do the proving:
 /// - all circuits as a callback
 /// - circuit recursion queues and associated inputs as a callback
@@ -76,18 +82,19 @@ pub fn run_vms<
     circuit_callback: CB,
     queue_simulator_callback: QSCB,
     out_of_circuit_tracer: &mut impl Tracer<SupportedMemory = SimpleMemory>,
-) -> (
+) -> Result<(
     SchedulerCircuitInstanceWitness<MainField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
     BlockAuxilaryOutputWitness<MainField>,
-) {
+), RunVmError> {
     let round_function = ZkSyncDefaultRoundFunction::default();
 
-    assert!(zk_porter_is_available == false);
-    assert_eq!(
-        ram_verification_queries.len(),
-        0,
-        "for now it's implemented such that we do not need it"
-    );
+    if zk_porter_is_available {
+        return Err(RunVmError::InvalidInput("zk porter not allowed".to_owned()));
+    }
+
+    if !ram_verification_queries.is_empty() {
+        return Err(RunVmError::InvalidInput("ram_verification_queries isn't empty; for now it's implemented such that we do not need it".to_owned()))
+    }
 
     let initial_rollup_root = tree.root();
     let initial_rollup_enumeration_counter = tree.next_enumeration_index();
@@ -200,14 +207,12 @@ pub fn run_vms<
             .expect("cycle should finish succesfully");
     }
 
-    assert!(
-        out_of_circuit_vm.execution_has_ended(),
-        "VM execution didn't finish"
-    );
-    assert_eq!(
-        out_of_circuit_vm.local_state.callstack.current.pc, 0,
-        "root frame ended up with panic"
-    );
+    if !out_of_circuit_vm.execution_has_ended() {
+        return Err(RunVmError::OutOfCircuitExecutionError("VM execution didn't finish".to_owned()));
+    }
+    if out_of_circuit_vm.local_state.callstack.current.pc != 0 {
+        return Err(RunVmError::OutOfCircuitExecutionError("root frame ended up with panic".to_owned()));
+    }
 
     println!("Out of circuit tracing is complete, now running witness generation");
 
@@ -732,5 +737,5 @@ pub fn run_vms<
         (scheduler_circuit_witness, aux_data)
     };
 
-    (scheduler_circuit_witness, aux_data)
+    Ok((scheduler_circuit_witness, aux_data))
 }

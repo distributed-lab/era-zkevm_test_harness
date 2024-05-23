@@ -40,7 +40,6 @@ use self::utils::*;
 
 pub mod capacity_estimator;
 pub mod external_calls;
-pub mod run;
 pub mod toolset;
 // pub mod circuit_limit_estimator;
 
@@ -55,3 +54,5 @@ pub mod proof_wrapper_utils;
 pub(crate) mod tests;
 
 pub use tests::complex_tests::utils::empty_node_proof;
+
+mod run_vms;

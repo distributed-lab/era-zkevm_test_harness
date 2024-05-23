@@ -1,7 +1,7 @@
 use crate::blake2::Blake2s256;
 use crate::ethereum_types::{Address, U256};
-use crate::run::run_vms;
-pub use crate::run::SCHEDULER_TIMESTAMP;
+use crate::run_vms::{run_vms, RunVmError};
+pub use crate::run_vms::SCHEDULER_TIMESTAMP;
 use crate::snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
 use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::toolset::GeometryConfig;
@@ -16,6 +16,7 @@ use crate::zkevm_circuits::scheduler::{
 use circuit_definitions::boojum::field::Field;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
+use circuit_definitions::snark_wrapper::franklin_crypto::plonk::circuit::verifier_circuit::affine_point_wrapper::aux_data;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::Field as MainField;
 
@@ -58,7 +59,7 @@ pub fn run<
     BlockAuxilaryOutputWitness<MainField>,
 ) {
     let mut out_of_circuit_tracer = GenericNoopTracer::<_>::new();
-    run_vms(
+    match run_vms(
         caller,
         entry_point_address,
         entry_point_code,
@@ -77,5 +78,14 @@ pub fn run<
         circuit_callback,
         queue_simulator_callback,
         &mut out_of_circuit_tracer,
-    )
+    ) {
+        Ok((scheduler_circuit_witness, aux_data)) => {(scheduler_circuit_witness, aux_data)},
+        Err(err) => {
+            let error_text = match err {
+                RunVmError::InvalidInput(msg) => {format!("Invalid input error: {msg}")},
+                RunVmError::OutOfCircuitExecutionError(msg) => {format!("Out-of-circuit execution error: {msg}")},
+            };
+            panic!("{error_text}");
+        }
+    }
 }
