@@ -54,3 +54,5 @@ pub mod proof_wrapper_utils;
 pub(crate) mod tests;
 
 pub use tests::complex_tests::utils::empty_node_proof;
+
+mod run_vms;
