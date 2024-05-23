@@ -1,6 +1,6 @@
 use crate::blake2::Blake2s256;
 use crate::ethereum_types::{Address, U256};
-use crate::run_vms::{run_vms, RunVmError};
+use crate::run_vms::{run_vms, RunVMsResult, RunVmError};
 pub use crate::run_vms::SCHEDULER_TIMESTAMP;
 use crate::snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
 use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
