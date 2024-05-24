@@ -40,6 +40,8 @@ pub struct TestingTracer {
     pub exception_message: Option<String>,
     /// the inner state, affects the interpretation of values from the VM
     tracer_state: TracerState,
+    /// stores pending messages that should be printed
+    message_buffer: Option<String>,
 }
 
 /// TestingTracer interprets valid x values in `add x r0 r0` and `ptr.add x r0 r0` instructions as commands to execute.
@@ -67,11 +69,16 @@ impl TestingTracer {
             panic!("Unexpected execute_print_from_register command");
         }
 
-        println!("{}", val.value);
+        if let Some(message) = &self.message_buffer {
+            println!("{message} {}", val.value);
+        } else {
+            println!("{}", val.value);
+        }
     }
 
     fn handle_value_from_vm(&mut self, value: PrimitiveValue) -> TracerState {
         let mut new_state = TracerState::ExpectingCommand;
+        let mut new_message_buffer_value = None;
 
         match self.tracer_state {
             TracerState::ExpectingValueToPrint(..) => {
@@ -87,10 +94,16 @@ impl TestingTracer {
                             self.execute_print(&arg);
                         }
                         PRINT_REG_PREFIX => {
+                            if !arg.is_empty() {
+                                new_message_buffer_value = Some(arg);
+                            }
                             new_state =
                                 TracerState::ExpectingValueToPrint(ExpectedValueType::Register);
                         }
                         PRINT_PTR_PREFIX => {
+                            if !arg.is_empty() {
+                                new_message_buffer_value = Some(arg);
+                            }
                             new_state =
                                 TracerState::ExpectingValueToPrint(ExpectedValueType::Pointer);
                         }
@@ -102,6 +115,7 @@ impl TestingTracer {
             }
         }
 
+        self.message_buffer = new_message_buffer_value;
         new_state
     }
 

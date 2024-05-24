@@ -1,7 +1,10 @@
+//! Contains functions to preprocess asm templates and generate valid assembly code compatible with TestingTracer
+use crate::ethereum_types::Address;
+use crate::ethereum_types::H160;
 use crate::ethereum_types::U256;
+use crate::zk_evm::bytecode_to_code_hash;
 use regex::Regex;
-
-// Contains functions to preprocess asm templates and generate valid assembly code compatible with TestingTracer
+use std::collections::HashMap;
 
 /// Default config template for simple tests
 const DEFAULT_CONFIG: &str = r#"
@@ -35,29 +38,108 @@ pub const PRINT_PREFIX: &str = "L:";
 pub const PRINT_REG_PREFIX: &str = "R:";
 pub const PRINT_PTR_PREFIX: &str = "P:";
 
+pub type TemplateDictionary<'a> = HashMap<&'a str, &'a str>;
+
 /// Replaces special directives in asm with TestingTracer compatible "commands"
-pub fn preprocess_asm(asm: &str) -> String {
-    let mut result = asm.to_owned();
-    for directive in [
+pub fn preprocess_asm(
+    asm: String,
+    additional_contracts: Option<&Vec<(H160, Vec<[u8; 32]>)>>,
+    dictionary: Option<&TemplateDictionary>,
+) -> String {
+    let asm = replace_tags_in_template(asm, dictionary);
+
+    let result = [
         Directive::Print(PrintType::Text),
         Directive::Print(PrintType::Register),
         Directive::Print(PrintType::Pointer),
         Directive::Revert,
-    ] {
-        result = preprocess_directive(&result, directive);
+    ]
+    .iter()
+    .fold(asm, |acc, x| preprocess_directive(acc, *x));
+
+    link_additional_contracts(&result, additional_contracts)
+}
+
+/// Replaces tags like "${TAG}" with values from dictionary
+fn replace_tags_in_template(
+    asm_template: String,
+    dictionary: Option<&TemplateDictionary>,
+) -> String {
+    let mut result = asm_template.clone();
+    let template_regex = Regex::new(r#"\$\{[^\}]+\}"#).expect("Invalid regex");
+
+    for (_, matched) in asm_template.match_indices(&template_regex) {
+        let prefix = "${";
+        let suffix = "}";
+        let key_to_replace = matched
+            .strip_prefix(prefix)
+            .expect("Invalid text in template")
+            .strip_suffix(suffix)
+            .expect("Invalid text in template");
+
+        if dictionary == None {
+            panic!("Unknown key: {key_to_replace}");
+        }
+
+        match dictionary.unwrap().get(key_to_replace) {
+            Some(value) => {
+                result = result.replace(matched, value);
+            }
+            None => panic!("Unknown key: {key_to_replace}"),
+        }
     }
+
     result
 }
 
-fn preprocess_directive(asm: &str, directive: Directive) -> String {
+fn preprocess_directive(asm: String, directive: Directive) -> String {
     let (asm_replaced, messages) = replace_directives(asm, directive);
-    add_data_section_for_directive(&asm_replaced, directive, messages)
+    add_data_section_for_directive(asm_replaced, directive, messages)
+}
+
+fn link_additional_contracts(
+    asm: &str,
+    additional_contracts: Option<&Vec<(H160, Vec<[u8; 32]>)>>,
+) -> String {
+    let mut result = asm.to_owned();
+    // regex: <ADDRESS.asm>
+    let contract_regex = Regex::new(r#"<\d+\.asm>"#).expect("Invalid regex");
+
+    for (_, matched) in asm.match_indices(&contract_regex) {
+        let prefix = "<";
+        let suffix = ".asm>";
+        let contract_address = Address::from_low_u64_be(
+            matched
+                .strip_prefix(&prefix)
+                .expect("Invalid text in directive")
+                .strip_suffix(&suffix)
+                .expect("Invalid text in directive")
+                .parse::<u64>()
+                .expect("Invalid additional contract address"),
+        );
+
+        if additional_contracts.is_none() {
+            panic!("Can't link additional contract: {}", matched);
+        }
+
+        result = if let Some((_, bytecode)) = additional_contracts
+            .unwrap()
+            .iter()
+            .find(|(address, _)| *address == contract_address)
+        {
+            let hash = bytecode_to_code_hash(&bytecode).unwrap();
+            result.replace(matched, &U256::from(hash).to_string())
+        } else {
+            panic!("Can't link additional contract: {}", matched);
+        }
+    }
+
+    result
 }
 
 /// replace all occurrences of the directive with the corresponding assembly code
-fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) {
-    let mut result = asm.to_owned();
-    let mut args: Vec<String> = Vec::new();
+fn replace_directives(asm: String, directive: Directive) -> (String, Vec<String>) {
+    let mut result = asm.clone();
 
     let (command_prefix, regex, cell_name, prefix, suffix) = match directive {
         Directive::Revert => {
@@ -77,8 +159,9 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
             (PRINT_PREFIX, print_regex, "PRINT", r#"print(""#, r#"")"#)
         }
         Directive::Print(PrintType::Register) => {
-            // regex: print(<src>)
-            let print_reg_regex = Regex::new(r#"print\([^"\))]+\)"#).expect("Invalid regex");
+            // regex: print(<src>) or print("<message", <src>)
+            let print_reg_regex =
+                Regex::new(r#"print\(("[^"\)]+"\s*\,\s*)?([^"\)]+)\)"#).expect("Invalid regex");
             (
                 PRINT_REG_PREFIX,
                 print_reg_regex,
@@ -100,6 +183,7 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
         }
     };
 
+    let mut args_for_commands: Vec<String> = Vec::new();
     for (index, matched) in asm.match_indices(&regex) {
         // skip if directive commented out
         if asm[..index]
@@ -111,29 +195,21 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
             continue;
         }
 
-        let arg = matched
-            .trim()
-            .strip_prefix(prefix)
-            .expect("Invalid text in directive")
-            .strip_suffix(suffix)
-            .expect("Invalid text in directive");
+        let matched_args = parse_args(matched, prefix, suffix);
 
-        match directive {
+        args_for_commands.push(match directive {
             Directive::Print(PrintType::Register | PrintType::Pointer) => {
-                // ignore any args
-                if args.is_empty() {
-                    args.push("".to_owned());
+                if matched_args.len() > 1 {
+                    // additional message
+                    check_arg_for_command(matched_args[0], command_prefix).to_owned()
+                } else {
+                    "".to_owned()
                 }
             }
-            _ => {
-                if arg.len() > 32 - command_prefix.len() {
-                    panic!("Message inside directive is too long: {}", arg);
-                }
-                args.push(arg.to_owned());
-            }
-        };
+            _ => check_arg_for_command(matched_args[0], command_prefix).to_owned(),
+        });
 
-        let reference_var = format!("@{}_{}_STRING", cell_name, args.len() - 1);
+        let reference_var = format!("@{}_{}_STRING", cell_name, args_for_commands.len() - 1);
         let line = format!("add {reference_var}, r0, r0");
 
         // additional lines
@@ -145,6 +221,11 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
                 if print_type == PrintType::Text {
                     line
                 } else {
+                    let src0 = if matched_args.len() == 1 {
+                        matched_args[0]
+                    } else {
+                        matched_args[1]
+                    };
                     let opcode = match print_type {
                         PrintType::Register => "add",
                         PrintType::Pointer => "ptr.add",
@@ -152,19 +233,19 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
                             panic!("Unknown print type")
                         }
                     };
-                    format!("{line}\n {opcode} {arg}, r0, r0")
+                    format!("{line}\n {opcode} {src0}, r0, r0")
                 }
             }
         };
         result = result.replace(matched, &line);
     }
 
-    (result, args)
+    (result, args_for_commands)
 }
 
-/// add .rodata section with messages from directives
-fn add_data_section_for_directive(asm: &str, directive: Directive, args: Vec<String>) -> String {
-    let mut result = asm.to_owned();
+/// add .rodata section with commands from directives
+fn add_data_section_for_directive(asm: String, directive: Directive, args: Vec<String>) -> String {
+    let mut result = asm;
     if args.is_empty() {
         return result;
     }
@@ -198,6 +279,29 @@ fn add_data_section_for_directive(asm: &str, directive: Directive, args: Vec<Str
     result
 }
 
+fn parse_args<'a>(text: &'a str, prefix: &str, suffix: &str) -> Vec<&'a str> {
+    // regex to split args from string like: <"a", b, c ...>
+    let args_regex = Regex::new(r#"(\"[^\"]*\")|,?\s*[^\s\,]+"#).expect("Invalid regex");
+    let trimmed_content = text
+        .strip_prefix(prefix)
+        .expect("Invalid text in directive")
+        .strip_suffix(suffix)
+        .expect("Invalid text in directive")
+        .trim();
+
+    trimmed_content
+        .matches(&args_regex)
+        .map(|x| x.trim_matches(',').trim().trim_matches('"'))
+        .collect()
+}
+
+fn check_arg_for_command<'a>(text_arg: &'a str, command_prefix: &str) -> &'a str {
+    if text_arg.len() > 32 - command_prefix.len() {
+        panic!("Message inside directive is too long: {}", text_arg);
+    }
+    text_arg
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,7 +315,7 @@ print("TEST")
 print(r5)
 revert("TEST2")"#;
 
-        let result = preprocess_asm(&asm);
+        let result = preprocess_asm(asm.to_owned(), None, None);
 
         let print_text = U256::from(format!("{}{}", PRINT_PREFIX, "TEST").as_bytes());
         let print_reg_text = U256::from(PRINT_REG_PREFIX.as_bytes());
@@ -259,7 +363,7 @@ add @REVERT_0_STRING, r0, r0
                     ret.ok r0
         "#, };
 
-        preprocess_asm(&asm);
+        preprocess_asm(asm.to_owned(), None, None);
     }
 
     #[test]
@@ -273,6 +377,41 @@ add @REVERT_0_STRING, r0, r0
                 .main:
                     ret.ok r0
         "#;
-        add_data_section_for_directive(asm, Directive::Print(PrintType::Text), args);
+        add_data_section_for_directive(asm.to_owned(), Directive::Print(PrintType::Text), args);
+    }
+
+    #[test]
+    fn test_templates_replace_tags() {
+        let mut dictionary: TemplateDictionary = Default::default();
+        dictionary.insert("src0", "5");
+        dictionary.insert("src1", "r0");
+        dictionary.insert("dst0", "r2");
+
+        let asm = r#"
+            .text
+            .globl	__unexpected_entry
+            __unexpected_entry:
+                .main:
+                    add ${src0} ${src1} ${dst0}
+                    ret.ok r0
+        "#;
+
+        let res = replace_tags_in_template(asm.to_owned(), Some(&dictionary));
+
+        let expected_res = format!(
+            r#"
+            .text
+            .globl	__unexpected_entry
+            __unexpected_entry:
+                .main:
+                    add {} {} {}
+                    ret.ok r0
+        "#,
+            dictionary.get("src0").unwrap(),
+            dictionary.get("src1").unwrap(),
+            dictionary.get("dst0").unwrap()
+        );
+
+        assert_eq!(res, expected_res);
     }
 }
