@@ -88,6 +88,7 @@ pub struct WitnessTracer {
     pub ecadd_witnesses: Vec<(u32, LogQuery, ECAddRoundWitness)>,
     pub ecmul_witnesses: Vec<(u32, LogQuery, ECMulRoundWitness)>,
     pub ecpairing_witnesses: Vec<(u32, LogQuery, Vec<ECPairingRoundWitness>)>,
+    pub modexp_witnesses: Vec<(u32, LogQuery, ModexpRoundWitness)>,
     pub monotonic_query_counter: usize,
     // pub log_frames_stack: Vec<ApplicationData<((usize, usize), (QueryMarker, u32, LogQuery))>>, // keep the unique frame index
     pub callstack_with_aux_data: CallstackWithAuxData,
@@ -152,6 +153,7 @@ impl WitnessTracer {
             ecadd_witnesses: vec![],
             ecmul_witnesses: vec![],
             ecpairing_witnesses: vec![],
+            modexp_witnesses: vec![],
             monotonic_query_counter: 0,
             // log_frames_stack: vec![ApplicationData::empty()],
             callstack_with_aux_data: CallstackWithAuxData::empty(),
@@ -228,6 +230,7 @@ impl AuxCallstackProto {
 
 use crate::zk_evm::vm_state::VmLocalState;
 use crate::zk_evm::witness_trace::VmWitnessTracer;
+use crate::zk_evm::zk_evm_abstractions::precompiles::modexp::ModexpRoundWitness;
 
 use super::vm_snapshot::VmSnapshot;
 
@@ -397,8 +400,12 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
                     wit.drain(..).collect(),
                 ));
             }
-            PrecompileCyclesWitness::Modexp(_wit) => {
-                // not implemented as of now
+            PrecompileCyclesWitness::Modexp(mut wit) => {
+                self.modexp_witnesses.push((
+                    monotonic_cycle_counter,
+                    call_params,
+                    wit.drain(..).next().unwrap(),
+                ));
             }
             PrecompileCyclesWitness::Secp256r1Verify(mut wit) => {
                 assert_eq!(wit.len(), 1);

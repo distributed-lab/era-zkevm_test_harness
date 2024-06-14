@@ -36,11 +36,12 @@ pub mod vm_main;
 // pub mod l1_messages_sort_dedup; // equal to one above
 pub mod eip4844;
 pub mod linear_hasher;
+pub mod modexp;
 
 pub use self::code_decommitter::CodeDecommitterInstanceSynthesisFunction;
-use self::ecadd::ECAddFunctionInstanceSynthesisFunction;
-use self::ecmul::ECMulFunctionInstanceSynthesisFunction;
-use self::ecpairing::ECPairingFunctionInstanceSynthesisFunction;
+pub use self::ecadd::ECAddFunctionInstanceSynthesisFunction;
+pub use self::ecmul::ECMulFunctionInstanceSynthesisFunction;
+pub use self::ecpairing::ECPairingFunctionInstanceSynthesisFunction;
 pub use self::ecrecover::ECRecoverFunctionInstanceSynthesisFunction;
 pub use self::eip4844::EIP4844InstanceSynthesisFunction;
 pub use self::events_sort_dedup::EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction;
@@ -98,6 +99,7 @@ pub type Secp256r1VerifyCircuit =
 pub type ECAddCircuit = ZkSyncUniformCircuitInstance<GoldilocksField, ECAddFunctionInstanceSynthesisFunction>;
 pub type ECMulCircuit = ZkSyncUniformCircuitInstance<GoldilocksField, ECMulFunctionInstanceSynthesisFunction>;
 pub type ECPairingCircuit = ZkSyncUniformCircuitInstance<GoldilocksField, ECPairingFunctionInstanceSynthesisFunction>;
+pub type ModexpCircuit = ZkSyncUniformCircuitInstance<GoldilocksField, ModexpFunctionInstanceSynthesisFunction>;
 pub type EIP4844Circuit =
     ZkSyncUniformCircuitInstance<GoldilocksField, EIP4844InstanceSynthesisFunction>;
 
@@ -126,6 +128,7 @@ pub enum ZkSyncBaseLayerStorage<
     TransientStorageSorter(T),
     Secp256r1Verify(T),
     EIP4844Repack(T),
+    Modexp(T),
 }
 
 impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned>
@@ -143,6 +146,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::ECAdd(..) => "Elliptic Curve points addition",
             ZkSyncBaseLayerStorage::ECMul(..) => "Elliptic Curve point multiplication by a scalar",
             ZkSyncBaseLayerStorage::ECPairing(..) => "Elliptic Curve pairing on BN254",
+            ZkSyncBaseLayerStorage::Modexp(..) => "Modular Exponentiation",
             ZkSyncBaseLayerStorage::RAMPermutation(..) => "RAM permutation",
             ZkSyncBaseLayerStorage::StorageSorter(..) => "Storage sorter",
             ZkSyncBaseLayerStorage::StorageApplication(..) => "Storage application",
@@ -151,7 +155,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::L1MessagesHasher(..) => "L1 messages rehasher",
             ZkSyncBaseLayerStorage::TransientStorageSorter(..) => "Transient storage sorter",
             ZkSyncBaseLayerStorage::Secp256r1Verify(..) => "Secp256r1 signature verifier",
-            ZkSyncBaseLayerStorage::EIP4844Repack(..) => "EIP4844 repacker",
+            ZkSyncBaseLayerStorage::EIP4844Repack(..) => "EIP4844 repacker"
         }
     }
 
@@ -174,9 +178,10 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::ECRecover(..) => {
                 BaseLayerCircuitType::EcrecoverPrecompile as u8
             }
-            ZkSyncBaseLayerStorage::ECAdd(..) => BaseLayerCircuitType::ECAdd as u8,
-            ZkSyncBaseLayerStorage::ECMul(..) => BaseLayerCircuitType::ECMul as u8,
-            ZkSyncBaseLayerStorage::ECPairing(..) => BaseLayerCircuitType::ECPairing as u8,
+            ZkSyncBaseLayerStorage::ECAdd(..) => BaseLayerCircuitType::ECAddPrecompile as u8,
+            ZkSyncBaseLayerStorage::ECMul(..) => BaseLayerCircuitType::ECMulPrecompile as u8,
+            ZkSyncBaseLayerStorage::ECPairing(..) => BaseLayerCircuitType::ECPairingPrecompile as u8,
+            ZkSyncBaseLayerStorage::Modexp(..) => BaseLayerCircuitType::ModExpPrecompile as u8,
             ZkSyncBaseLayerStorage::RAMPermutation(..) => BaseLayerCircuitType::RamValidation as u8,
             ZkSyncBaseLayerStorage::StorageSorter(..) => BaseLayerCircuitType::StorageFilter as u8,
             ZkSyncBaseLayerStorage::StorageApplication(..) => {
@@ -221,6 +226,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::ECAdd(inner) => inner,
             ZkSyncBaseLayerStorage::ECMul(inner) => inner,
             ZkSyncBaseLayerStorage::ECPairing(inner) => inner,
+            ZkSyncBaseLayerStorage::Modexp(inner) => inner,
             ZkSyncBaseLayerStorage::EIP4844Repack(inner) => inner,
         }
     }
@@ -257,9 +263,10 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             }
             a if a == BaseLayerCircuitType::Secp256r1Verify as u8 => Self::Secp256r1Verify(inner),
             a if a == BaseLayerCircuitType::EIP4844Repack as u8 => Self::EIP4844Repack(inner),
-            a if a == BaseLayerCircuitType::ECAdd as u8 => Self::ECAdd(inner),
-            a if a == BaseLayerCircuitType::ECMul as u8 => Self::ECMul(inner),
-            a if a == BaseLayerCircuitType::ECPairing as u8 => Self::ECPairing(inner),
+            a if a == BaseLayerCircuitType::ECAddPrecompile as u8 => Self::ECAdd(inner),
+            a if a == BaseLayerCircuitType::ECMulPrecompile as u8 => Self::ECMul(inner),
+            a if a == BaseLayerCircuitType::ECPairingPrecompile as u8 => Self::ECPairing(inner),
+            a if a == BaseLayerCircuitType::ModExpPrecompile as u8 => Self::Modexp(inner),
             a @ _ => panic!("unknown numeric type {}", a),
         }
     }
@@ -299,6 +306,7 @@ where
     ECAdd(ECAddCircuit),
     ECMul(ECMulCircuit),
     ECPairing(ECPairingCircuit),
+    Modexp(ModexpCircuit)
 }
 
 impl ZkSyncBaseLayerCircuit
@@ -332,6 +340,7 @@ where
             ZkSyncBaseLayerCircuit::ECAdd(..) => "ECAdd",
             ZkSyncBaseLayerCircuit::ECMul(..) => "ECMul",
             ZkSyncBaseLayerCircuit::ECPairing(..) => "ECPairing",
+            ZkSyncBaseLayerCircuit::Modexp(..) => "Modexp",
         }
     }
 
@@ -356,6 +365,7 @@ where
             ZkSyncBaseLayerCircuit::ECAdd(inner) => inner.size_hint(),
             ZkSyncBaseLayerCircuit::ECMul(inner) => inner.size_hint(),
             ZkSyncBaseLayerCircuit::ECPairing(inner) => inner.size_hint(),
+            ZkSyncBaseLayerCircuit::Modexp(inner) => inner.size_hint()
         }
     }
 
@@ -456,6 +466,8 @@ where
             ZkSyncBaseLayerCircuit::ECAdd(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
             ZkSyncBaseLayerCircuit::ECMul(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
             ZkSyncBaseLayerCircuit::ECPairing(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
+            ZkSyncBaseLayerCircuit::Modexp(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
+
         }
     }
 
@@ -480,6 +492,7 @@ where
             ZkSyncBaseLayerCircuit::ECAdd(inner) => inner.geometry_proxy(),
             ZkSyncBaseLayerCircuit::ECMul(inner) => inner.geometry_proxy(),
             ZkSyncBaseLayerCircuit::ECPairing(inner) => inner.geometry_proxy(),
+            ZkSyncBaseLayerCircuit::Modexp(inner) => inner.geometry_proxy(),
         }
     }
 
@@ -542,6 +555,9 @@ where
             ZkSyncBaseLayerCircuit::ECPairing(inner) => {
                 inner.debug_witness();
             }
+            ZkSyncBaseLayerCircuit::Modexp(inner) => {
+                inner.debug_witness();
+            }
         };
 
         ()
@@ -587,9 +603,10 @@ where
                 BaseLayerCircuitType::Secp256r1Verify as u8
             }
             ZkSyncBaseLayerCircuit::EIP4844Repack(..) => BaseLayerCircuitType::EIP4844Repack as u8,
-            ZkSyncBaseLayerCircuit::ECAdd(..) => BaseLayerCircuitType::ECAdd as u8,
-            ZkSyncBaseLayerCircuit::ECMul(..) => BaseLayerCircuitType::ECMul as u8,
-            ZkSyncBaseLayerCircuit::ECPairing(..) => BaseLayerCircuitType::ECPairing as u8,
+            ZkSyncBaseLayerCircuit::ECAdd(..) => BaseLayerCircuitType::ECAddPrecompile as u8,
+            ZkSyncBaseLayerCircuit::ECMul(..) => BaseLayerCircuitType::ECMulPrecompile as u8,
+            ZkSyncBaseLayerCircuit::ECPairing(..) => BaseLayerCircuitType::ECPairingPrecompile as u8,
+            ZkSyncBaseLayerCircuit::Modexp(..) => BaseLayerCircuitType::ModExpPrecompile as u8,
         }
     }
 }
@@ -617,6 +634,7 @@ pub type ZkSyncBaseLayerFinalizationHint = ZkSyncBaseLayerStorage<FinalizationHi
 
 use crate::boojum::cs::implementations::verifier::VerificationKey;
 use crate::boojum::field::traits::field_like::PrimeFieldLikeVectorized;
+use crate::circuit_definitions::base_layer::modexp::ModexpFunctionInstanceSynthesisFunction;
 
 pub type ZkSyncBaseVerificationKey = VerificationKey<GoldilocksField, BaseProofsTreeHasher>;
 

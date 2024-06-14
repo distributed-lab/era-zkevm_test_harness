@@ -65,6 +65,7 @@ pub enum ZkSyncRecursiveLayerCircuit {
     LeafLayerCircuitForECMul(ZkSyncLeafLayerRecursiveCircuit),
     LeafLayerCircuitForECPairing(ZkSyncLeafLayerRecursiveCircuit),
     RecursionTipCircuit(ZkSyncRecursionTipCircuit),
+    LeafLayerCircuitForModexp(ZkSyncLeafLayerRecursiveCircuit),
 }
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
@@ -93,6 +94,7 @@ pub enum ZkSyncRecursionLayerStorageType {
     LeafLayerCircuitForECAdd = 19,
     LeafLayerCircuitForECMul = 20,
     LeafLayerCircuitForECPairing = 21,
+    LeafLayerCircuitForModexp = 22,
     RecursionTipCircuit = 255,
 }
 
@@ -160,13 +162,16 @@ impl ZkSyncRecursionLayerStorageType {
                 BaseLayerCircuitType::EIP4844Repack as u8
             }
             a if a == Self::LeafLayerCircuitForECAdd as u8 => {
-                BaseLayerCircuitType::ECAdd as u8 
+                BaseLayerCircuitType::ECAddPrecompile as u8
             }
             a if a == Self::LeafLayerCircuitForECMul as u8 => {
-                BaseLayerCircuitType::ECMul as u8 
+                BaseLayerCircuitType::ECMulPrecompile as u8
             }
             a if a == Self::LeafLayerCircuitForECPairing as u8 => {
-                BaseLayerCircuitType::ECPairing as u8
+                BaseLayerCircuitType::ECPairingPrecompile as u8
+            }
+            a if a == Self::LeafLayerCircuitForModexp as u8 => {
+                BaseLayerCircuitType::ModExpPrecompile as u8
             }
             _ => {
                 panic!(
@@ -206,6 +211,7 @@ pub enum ZkSyncRecursionLayerStorage<
     LeafLayerCircuitForECAdd(T) = 19,
     LeafLayerCircuitForECMul(T) = 20,
     LeafLayerCircuitForECPairing(T) = 21,
+    LeafLayerCircuitForModexp(T) = 22,
     RecursionTipCircuit(T) = 255,
 }
 
@@ -268,6 +274,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             }
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForECPairing(..) => {
                 "Leaf for ECPairing"
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForModexp(..) => {
+                "Leaf for Modexp"
             }
             ZkSyncRecursionLayerStorage::RecursionTipCircuit(..) => "Recursion tip",
         }
@@ -338,6 +347,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForECPairing(..) => {
                 ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECPairing as u8
             }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForModexp(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForModexp as u8
+            }
             ZkSyncRecursionLayerStorage::RecursionTipCircuit(..) => {
                 ZkSyncRecursionLayerStorageType::RecursionTipCircuit as u8
             }
@@ -367,6 +379,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             Self::LeafLayerCircuitForECAdd(inner) => inner,
             Self::LeafLayerCircuitForECMul(inner) => inner,
             Self::LeafLayerCircuitForECPairing(inner) => inner,
+            Self::LeafLayerCircuitForModexp(inner) => inner,
             Self::RecursionTipCircuit(inner) => inner,
         }
     }
@@ -454,6 +467,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECPairing as u8 => {
                 Self::LeafLayerCircuitForECPairing(inner)
             }
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForModexp as u8 => {
+                Self::LeafLayerCircuitForModexp(inner)
+            }
             a if a == ZkSyncRecursionLayerStorageType::RecursionTipCircuit as u8 => {
                 Self::RecursionTipCircuit(inner)
             }
@@ -496,9 +512,10 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             BaseLayerCircuitType::Secp256r1Verify => {
                 Self::LeafLayerCircuitForSecp256r1Verify(inner)
             }
-            BaseLayerCircuitType::ECAdd => Self::LeafLayerCircuitForECAdd(inner),
-            BaseLayerCircuitType::ECMul => Self::LeafLayerCircuitForECMul(inner),
-            BaseLayerCircuitType::ECPairing => Self::LeafLayerCircuitForECPairing(inner),
+            BaseLayerCircuitType::ECAddPrecompile => Self::LeafLayerCircuitForECAdd(inner),
+            BaseLayerCircuitType::ECMulPrecompile => Self::LeafLayerCircuitForECMul(inner),
+            BaseLayerCircuitType::ECPairingPrecompile => Self::LeafLayerCircuitForECPairing(inner),
+            BaseLayerCircuitType::ModExpPrecompile => Self::LeafLayerCircuitForModexp(inner),
             BaseLayerCircuitType::EIP4844Repack => Self::LeafLayerCircuitForEIP4844Repack(inner),
             circuit_type => {
                 panic!("unknown base circuit type for leaf: {:?}", circuit_type);
@@ -566,6 +583,7 @@ impl ZkSyncRecursiveLayerCircuit {
             Self::LeafLayerCircuitForECAdd(..) => "Leaf for ECAdd",
             Self::LeafLayerCircuitForECMul(..) => "Leaf for ECMul",
             Self::LeafLayerCircuitForECPairing(..) => "Leaf for ECPairing",
+            Self::LeafLayerCircuitForModexp(..) => "Leaf for Modexp",
             Self::RecursionTipCircuit(..) => "Recursion tip",
         }
     }
@@ -631,6 +649,9 @@ impl ZkSyncRecursiveLayerCircuit {
             Self::LeafLayerCircuitForECPairing(..) => {
                 ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECPairing as u8
             }
+            Self::LeafLayerCircuitForModexp(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForModexp as u8
+            }
             Self::RecursionTipCircuit(..) => {
                 ZkSyncRecursionLayerStorageType::RecursionTipCircuit as u8
             }
@@ -660,6 +681,7 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForECAdd(inner) 
             | Self::LeafLayerCircuitForECMul(inner) 
             | Self::LeafLayerCircuitForECPairing(inner) => inner.size_hint(),
+            | Self::LeafLayerCircuitForModexp(inner) => inner.size_hint(),
             Self::RecursionTipCircuit(inner) => inner.size_hint(),
         }
     }
@@ -686,7 +708,8 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForEIP4844Repack(..) 
             | Self::LeafLayerCircuitForECAdd(..)
             | Self::LeafLayerCircuitForECMul(..)
-            | Self::LeafLayerCircuitForECPairing(..) => {
+            | Self::LeafLayerCircuitForECPairing(..)
+            | Self::LeafLayerCircuitForModexp(..) => {
                 ZkSyncLeafLayerRecursiveCircuit::geometry()
             }
             Self::RecursionTipCircuit(..) => ZkSyncRecursionTipCircuit::geometry(),
@@ -796,6 +819,7 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForECAdd(inner)
             | Self::LeafLayerCircuitForECMul(inner)
             | Self::LeafLayerCircuitForECPairing(inner)
+            | Self::LeafLayerCircuitForModexp(inner)
             | Self::LeafLayerCircuitForEIP4844Repack(inner) => {
                 Self::synthesis_inner::<_, CR>(inner, hint)
             }
@@ -846,7 +870,8 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForEIP4844Repack(..)
             | Self::LeafLayerCircuitForECAdd(..) 
             | Self::LeafLayerCircuitForECMul(..)
-            | Self::LeafLayerCircuitForECPairing(..) =>{
+            | Self::LeafLayerCircuitForECPairing(..)
+            | Self::LeafLayerCircuitForModexp(..) => {
                 ConcreteNodeLayerCircuitBuilder::dyn_verifier_builder::<EXT>()
             }
             Self::RecursionTipCircuit(..) => {
@@ -884,7 +909,8 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForEIP4844Repack(..) 
             | Self::LeafLayerCircuitForECAdd(..) 
             | Self::LeafLayerCircuitForECMul(..)
-            | Self::LeafLayerCircuitForECPairing(..) => {
+            | Self::LeafLayerCircuitForECPairing(..)
+            | Self::LeafLayerCircuitForModexp(..) => {
                 ConcreteNodeLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
             }
             Self::RecursionTipCircuit(..) => {
@@ -932,6 +958,10 @@ impl ZkSyncRecursiveLayerCircuit {
                 Self::LeafLayerCircuitForSecp256r1Verify(inner)
             }
             BaseLayerCircuitType::EIP4844Repack => Self::LeafLayerCircuitForEIP4844Repack(inner),
+            BaseLayerCircuitType::ECAddPrecompile => Self::LeafLayerCircuitForECAdd(inner),
+            BaseLayerCircuitType::ECMulPrecompile => Self::LeafLayerCircuitForECMul(inner),
+            BaseLayerCircuitType::ECPairingPrecompile => Self::LeafLayerCircuitForECPairing(inner),
+            BaseLayerCircuitType::ModExpPrecompile => Self::LeafLayerCircuitForModexp(inner),
             circuit_type => {
                 panic!("unknown base circuit type for leaf: {:?}", circuit_type);
             }
@@ -989,17 +1019,17 @@ pub fn base_circuit_type_into_recursive_leaf_circuit_type(
         BaseLayerCircuitType::Secp256r1Verify => {
             ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSecp256r1Verify
         }
-        BaseLayerCircuitType::ECAdd => {
+        BaseLayerCircuitType::ECAddPrecompile => {
             ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECAdd
         }
-        BaseLayerCircuitType::ECMul => {
+        BaseLayerCircuitType::ECMulPrecompile => {
             ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECMul
         }
-        BaseLayerCircuitType::ECPairing => {
+        BaseLayerCircuitType::ECPairingPrecompile => {
             ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECPairing
         }
-        BaseLayerCircuitType::ModExp => {
-            unimplemented!("For now not supported")
+        BaseLayerCircuitType::ModExpPrecompile => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForModexp
         }
         BaseLayerCircuitType::EIP4844Repack => {
             ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEIP4844Repack

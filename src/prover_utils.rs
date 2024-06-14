@@ -213,6 +213,14 @@ pub fn create_base_layer_setup_data(
             inner.synthesize_proxy(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
             (cs.into_assembly::<std::alloc::Global>(), finalization_hint)
+        },
+        ZkSyncBaseLayerCircuit::Modexp(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(num_vars.unwrap());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            (cs.into_assembly::<std::alloc::Global>(), finalization_hint)
         }
     };
 
@@ -412,6 +420,14 @@ pub fn prove_base_layer_circuit<POW: PoWRunner>(
             inner.synthesize_proxy(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
             cs.into_assembly::<std::alloc::Global>()
+        },
+        ZkSyncBaseLayerCircuit::Modexp(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(num_vars.unwrap());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.into_assembly::<std::alloc::Global>()
         }
     };
 
@@ -511,7 +527,8 @@ pub fn create_recursive_layer_setup_data(
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEIP4844Repack(inner) 
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECAdd(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECMul(inner)
-        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECPairing(inner) => {
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECPairing(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForModexp(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(num_vars.unwrap());
             inner.add_tables(&mut cs);
@@ -610,7 +627,8 @@ pub fn prove_recursion_layer_circuit<POW: PoWRunner>(
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEIP4844Repack(inner) 
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECAdd(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECMul(inner)
-        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECPairing(inner) => {
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECPairing(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForModexp(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(num_vars.unwrap());
             inner.add_tables(&mut cs);
