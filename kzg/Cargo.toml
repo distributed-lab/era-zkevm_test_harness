@@ -16,12 +16,15 @@ hex = "*"
 once_cell = "1"
 serde_with = {version = "1", features = ["hex"]}
 
-# TODO: Once everything is merged, we should switch to the git version instead of local paths
+# TODO: change to use matter-labs when everything is merged:
 # boojum = {git = "https://github.com/matter-labs/era-boojum", branch = "dl-precompiles"}
-boojum = {path = "../../era-boojum"}
+boojum = {git = "https://github.com/distributed-lab/era-boojum", branch = "feature/bn254-ec-pairing"}
+# boojum = {path = "../../era-boojum"}
 
+# TODO: change to use matter-labs when everything is merged:
 # zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits", branch = "dl-precompiles"}
-zkevm_circuits = {path = "../../era-zkevm_circuits"}
+zkevm_circuits = {git = "https://github.com/distributed-lab/era-zkevm_circuits", branch = "feature/bn254-circuits"}
+# zkevm_circuits = {path = "../../era-zkevm_circuits"}
 
 [dev-dependencies]
 rand = "0.4"
